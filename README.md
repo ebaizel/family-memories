@@ -1,8 +1,19 @@
 # Family Memories
 
-A private, zero-friction place to capture your family's everyday moments — kid quotes, photos, voice memos, videos, notes — by messaging a Telegram bot. Moments land in a timeline that tags each kid with their **age at that moment** ("Maya, 2y 4mo"), and a weekly digest email keeps everyone caught up.
+A private, zero-friction place to capture your family's everyday moments — kid quotes, photos, voice memos, videos, notes — by messaging a Telegram bot **or from the phone-first capture app**. Moments land in a timeline that tags each kid with their **age at that moment** ("Maya, 2y 4mo"), and a weekly digest email keeps everyone caught up.
 
-This is **Slice A** of the plan in [IDEAS.md](IDEAS.md): the quote catcher.
+This covers **Slice A** (the quote catcher) plus the **PWA capture app** from the plan in [IDEAS.md](IDEAS.md).
+
+## The capture app (PWA)
+
+Open `/capture` on your phone — big one-tap buttons for **Quote / Photo / Video / Voice**:
+
+- **Quote/note**: type it, tap a kid chip, save. The response confirms the kid's age at that moment.
+- **Photo & video**: opens the native camera or photo library.
+- **Voice**: records in the browser (MediaRecorder) with live timer and playback preview before saving.
+- The timeline at `/` has per-kid filter chips and a Capture button.
+
+Install it like an app: in Safari (iOS) or Chrome (Android), open the site → Share → **Add to Home Screen**. It launches straight into the capture screen with the family-memories icon.
 
 ## How it works
 
@@ -72,6 +83,8 @@ npm test        # age + parsing unit tests
 npm run dev     # watch mode
 ```
 
+PWA icons are checked in under `public/icons/`; regenerate with `node scripts/gen-icons.mjs`.
+
 ## What's next (Slices B & C)
 
-Email-in ingestion, upload-only invite links for grandparents, per-kid timelines and age views, milestones, search, "on this day" resurfacing, and a yearbook PDF generator — see [IDEAS.md](IDEAS.md).
+Email-in ingestion, upload-only invite links for grandparents, milestones, search, "on this day" resurfacing, and a yearbook PDF generator — see [IDEAS.md](IDEAS.md).

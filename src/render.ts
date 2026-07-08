@@ -1,4 +1,4 @@
-import { type MomentWithKid } from "./db.js";
+import { type Kid, type MomentWithKid } from "./db.js";
 import { ageAt } from "./age.js";
 
 const ICONS: Record<string, string> = {
@@ -62,26 +62,49 @@ const STYLE = `
   audio { width: 100%; margin-top: 0.75rem; }
   footer { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
   .empty { color: var(--muted); text-align: center; padding: 3rem 0; }
+  nav { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1rem; }
+  nav h1 { margin: 0; }
+  .capture-link { color: #fff; background: var(--accent); text-decoration: none; font-weight: 700;
+                  padding: 0.5rem 1rem; border-radius: 999px; font-size: 0.9rem; }
+  .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .filters a { border: 1.5px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px;
+               padding: 0.35rem 0.9rem; font-size: 0.9rem; text-decoration: none; }
+  .filters a.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 `;
 
-export function timelinePage(moments: MomentWithKid[]): string {
+export function timelinePage(moments: MomentWithKid[], kids: Kid[] = [], selectedKidId?: number): string {
   const cards = moments.length
     ? moments.map(momentCard).join("\n")
-    : `<p class="empty">No moments yet — message the bot to save your first one.</p>`;
+    : `<p class="empty">No moments yet — capture your first one!</p>`;
+  const filters = kids.length
+    ? `<div class="filters">
+        <a href="/" class="${selectedKidId ? "" : "selected"}">Everyone</a>
+        ${kids
+          .map((k) => `<a href="/?kid=${k.id}" class="${selectedKidId === k.id ? "selected" : ""}">${esc(k.name)}</a>`)
+          .join("")}
+      </div>`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
   <title>Family Memories</title>
   <style>${STYLE}</style>
 </head>
 <body>
   <main>
-    <h1>Family Memories</h1>
+    <nav>
+      <h1>Family Memories</h1>
+      <a class="capture-link" href="/capture">＋ Capture</a>
+    </nav>
+    ${filters}
     ${cards}
   </main>
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");</script>
 </body>
 </html>`;
 }
