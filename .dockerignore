@@ -1,0 +1,9 @@
+node_modules
+data
+.git
+*.log
+.env
+tests
+scripts
+IDEAS.md
+README.md

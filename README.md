@@ -43,23 +43,42 @@ Send the bot:
 
 Commands: `/addkid Maya 2023-04-12`, `/kids`, `/help`
 
-## Setup
+## Kids
 
-1. **Create the bot**: message [@BotFather](https://t.me/BotFather) on Telegram → `/newbot` → copy the token.
-2. **Install & run**:
+Add each child at **`/kids`** (name + birthday) — or via the bot with `/addkid Maya 2023-04-12`. Every moment gets tagged with the child's exact age at capture time; names show as tag chips on the capture and contribute screens, and as filters on the timeline. Birthdays and names can be edited later from the same page.
 
-   ```bash
-   npm install
-   TELEGRAM_BOT_TOKEN=123:abc WEBHOOK_SECRET=$(openssl rand -hex 16) SITE_PASSWORD=yourpassword npm start
-   ```
+## Deploy on Fly.io (recommended first launch)
 
-3. **Point Telegram at your server** (needs a public HTTPS URL — see Deploying):
+The Telegram bot is optional — the web app alone is fully usable, so you can ship this in ~10 minutes and add the bot later.
 
-   ```bash
-   curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=https://your.domain/webhook/$WEBHOOK_SECRET"
-   ```
+```bash
+# 1. Install flyctl and sign up (once): https://fly.io/docs/flyctl/install/
+fly launch --copy-config --no-deploy   # pick an app name + region; keep the volume config
 
-4. Message your bot `/addkid Maya 2023-04-12`, then start capturing.
+# 2. Secrets (the only required one is the site password)
+fly secrets set SITE_PASSWORD=pick-a-password WEBHOOK_SECRET=$(openssl rand -hex 16)
+
+# 3. Ship it
+fly deploy
+```
+
+Open `https://<your-app>.fly.dev/kids`, add your kids, and start capturing at `/capture` (login: user `family` + your password). Add it to your phone's home screen, and create invite links at `/invites` for the grandparents.
+
+**Optional — Telegram bot** (capture by texting): message [@BotFather](https://t.me/BotFather) → `/newbot` → then:
+
+```bash
+fly secrets set TELEGRAM_BOT_TOKEN=123:abc
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-app>.fly.dev/webhook/<WEBHOOK_SECRET>"
+```
+
+**Optional — weekly digest email**: set `RESEND_API_KEY`, `DIGEST_FROM`, `DIGEST_TO` secrets and schedule `curl -X POST https://<your-app>.fly.dev/digest/send/<WEBHOOK_SECRET>` weekly (GitHub Actions cron works fine).
+
+## Run locally
+
+```bash
+npm install
+SITE_PASSWORD=yourpassword WEBHOOK_SECRET=$(openssl rand -hex 16) npm start
+```
 
 The timeline is at `/` (HTTP Basic auth, user `family`, password `SITE_PASSWORD`).
 
@@ -67,9 +86,9 @@ The timeline is at `/` (HTTP Basic auth, user `family`, password `SITE_PASSWORD`
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `TELEGRAM_BOT_TOKEN` | yes | From BotFather |
-| `WEBHOOK_SECRET` | yes | Random string; gates the webhook and digest-send URLs |
-| `SITE_PASSWORD` | yes (in production) | Protects the timeline and media |
+| `SITE_PASSWORD` | yes (in production) | Protects the timeline, capture, and media |
+| `WEBHOOK_SECRET` | yes | Random string; gates the Telegram webhook and digest-send URLs |
+| `TELEGRAM_BOT_TOKEN` | no | From BotFather; enables capture-by-texting |
 | `PORT` | no | Default 3000 |
 | `DATA_DIR` | no | Where SQLite + media live; default `./data` |
 | `RESEND_API_KEY`, `DIGEST_FROM`, `DIGEST_TO` | no | Enables the weekly digest email (comma-separated recipients) |
@@ -80,9 +99,9 @@ The timeline is at `/` (HTTP Basic auth, user `family`, password `SITE_PASSWORD`
 - To send: `POST /digest/send/$WEBHOOK_SECRET` — schedule it weekly with any cron (e.g. `fly machines`, GitHub Actions schedule, or cron on the host).
 - Emails send via [Resend](https://resend.com) when configured; otherwise the endpoint reports the count without sending.
 
-## Deploying
+## Deploying elsewhere
 
-Any host with a persistent disk works (SQLite + media files live in `DATA_DIR`). A small [Fly.io](https://fly.io) machine with a volume mounted at `/data` (`DATA_DIR=/data`) is a good fit and gives you the public HTTPS URL Telegram needs.
+Any host that can run the `Dockerfile` with a persistent disk works — SQLite and media files live in `DATA_DIR`, so mount a volume there and set the secrets from the table above.
 
 ## Development
 
@@ -94,6 +113,6 @@ npm run dev     # watch mode
 
 PWA icons are checked in under `public/icons/`; regenerate with `node scripts/gen-icons.mjs`.
 
-## What's next (Slices B & C)
+## What's next
 
-Email-in ingestion, upload-only invite links for grandparents, milestones, search, "on this day" resurfacing, and a yearbook PDF generator — see [IDEAS.md](IDEAS.md).
+Email-in ingestion, milestones, search, "on this day" resurfacing, and a yearbook PDF generator — see [IDEAS.md](IDEAS.md).

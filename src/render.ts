@@ -100,6 +100,7 @@ export function timelinePage(moments: MomentWithKid[], kids: Kid[] = [], selecte
     <nav>
       <h1>Family Memories</h1>
       <span>
+        <a href="/kids" style="color:var(--muted);text-decoration:none;font-size:0.85rem;margin-right:0.75rem">Kids</a>
         <a href="/invites" style="color:var(--muted);text-decoration:none;font-size:0.85rem;margin-right:0.75rem">Invites</a>
         <a class="capture-link" href="/capture">＋ Capture</a>
       </span>
