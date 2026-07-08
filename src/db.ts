@@ -76,14 +76,21 @@ export function addMoment(m: {
   return db.prepare("SELECT * FROM moments WHERE id = ?").get(info.lastInsertRowid) as Moment;
 }
 
-export function recentMoments(limit = 200): MomentWithKid[] {
+export function recentMoments(limit = 200, kidId?: number): MomentWithKid[] {
+  const where = kidId ? "WHERE m.kid_id = ?" : "";
+  const params = kidId ? [kidId, limit] : [limit];
   return db
     .prepare(
       `SELECT m.*, k.name AS kid_name, k.birthdate AS kid_birthdate
        FROM moments m LEFT JOIN kids k ON k.id = m.kid_id
+       ${where}
        ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
     )
-    .all(limit) as MomentWithKid[];
+    .all(...params) as MomentWithKid[];
+}
+
+export function getKid(id: number): Kid | undefined {
+  return db.prepare("SELECT * FROM kids WHERE id = ?").get(id) as Kid | undefined;
 }
 
 export function momentsSince(isoDate: string): MomentWithKid[] {
