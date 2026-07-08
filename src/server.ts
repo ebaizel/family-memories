@@ -1,13 +1,17 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { serve } from "@hono/node-server";
 import { basicAuth } from "hono/basic-auth";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { config, mediaDir } from "./config.js";
-import { addMoment, getKid, listKids, recentMoments, type MomentType } from "./db.js";
+import {
+  addMoment, createInvite, findInvite, getKid, inviteUsable, listInvites, listKids,
+  recentMoments, revokeInvite, type MomentType,
+} from "./db.js";
 import { timelinePage } from "./render.js";
 import { capturePage } from "./capture.js";
+import { invitesPage, inviteGonePage } from "./invites.js";
 import { ageAt } from "./age.js";
 import { handleUpdate } from "./telegram.js";
 import { buildWeeklyDigest, sendWeeklyDigest } from "./digest.js";
@@ -59,33 +63,20 @@ app.get("/icons/:file", (c) => {
   });
 });
 
-// --- Family-facing pages, behind basic auth ---
-if (config.sitePassword) {
-  app.use("/*", basicAuth({ username: "family", password: config.sitePassword }));
-}
-
-app.get("/", (c) => {
-  const kidParam = Number(c.req.query("kid"));
-  const kidId = Number.isInteger(kidParam) && kidParam > 0 ? kidParam : undefined;
-  return c.html(timelinePage(recentMoments(200, kidId), listKids(), kidId));
-});
-
-app.get("/capture", (c) => c.html(capturePage(listKids())));
-
+// --- Shared moment-saving for the family capture screen and invite links ---
 const MEDIA_EXT: Record<string, string> = {
   "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/heic": ".heic",
   "audio/mp4": ".m4a", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/ogg": ".ogg",
   "video/mp4": ".mp4", "video/quicktime": ".mov", "video/webm": ".webm",
 };
 
-app.post("/api/moments", async (c) => {
-  const body = await c.req.parseBody();
+async function saveMomentFromForm(c: Context, body: Record<string, unknown>, authorFallback?: string) {
   const type = String(body.type ?? "");
   if (!["quote", "note", "photo", "audio", "video"].includes(type)) {
     return c.text("invalid type", 400);
   }
   const text = String(body.text ?? "").trim() || null;
-  const author = String(body.author ?? "").trim() || null;
+  const author = String(body.author ?? "").trim() || authorFallback || null;
   const kidIdRaw = Number(body.kid_id);
   const kid = Number.isInteger(kidIdRaw) && kidIdRaw > 0 ? getKid(kidIdRaw) : undefined;
 
@@ -102,7 +93,6 @@ app.post("/api/moments", async (c) => {
   if (!mediaFile && !text) return c.text("empty moment", 400);
 
   const moment = addMoment({
-    // Text sent as "quote" but untagged still reads better as a quote; keep the client's word.
     type: type as MomentType,
     text,
     mediaFile,
@@ -114,6 +104,59 @@ app.post("/api/moments", async (c) => {
     kid_name: kid?.name ?? null,
     age: kid ? ageAt(kid.birthdate, new Date()) : null,
   });
+}
+
+// --- Contribute via invite link: public, upload-only, never shows the timeline ---
+app.get("/contribute/:token", (c) => {
+  const invite = findInvite(c.req.param("token"));
+  if (!invite || !inviteUsable(invite)) return c.html(inviteGonePage(), 410);
+  return c.html(capturePage(listKids(), { token: invite.token, label: invite.label }));
+});
+
+app.post("/api/contribute/:token", async (c) => {
+  const invite = findInvite(c.req.param("token"));
+  if (!invite || !inviteUsable(invite)) return c.text("invite no longer active", 410);
+  return saveMomentFromForm(c, await c.req.parseBody(), invite.label);
+});
+
+// --- Family-facing pages, behind basic auth ---
+if (config.sitePassword) {
+  app.use("/*", basicAuth({ username: "family", password: config.sitePassword }));
+}
+
+app.get("/", (c) => {
+  const kidParam = Number(c.req.query("kid"));
+  const kidId = Number.isInteger(kidParam) && kidParam > 0 ? kidParam : undefined;
+  return c.html(timelinePage(recentMoments(200, kidId), listKids(), kidId));
+});
+
+app.get("/capture", (c) => c.html(capturePage(listKids())));
+
+app.post("/api/moments", async (c) => saveMomentFromForm(c, await c.req.parseBody()));
+
+// --- Invite admin (still behind auth) ---
+app.get("/invites", (c) => {
+  const proto = c.req.header("x-forwarded-proto") ?? "http";
+  const host = c.req.header("x-forwarded-host") ?? c.req.header("host") ?? "localhost";
+  return c.html(invitesPage(listInvites(), `${proto}://${host}`));
+});
+
+app.post("/api/invites", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const label = String(body.label ?? "").trim();
+  if (!label) return c.text("label required", 400);
+  const days = Number(body.expires_days);
+  const expiresAt =
+    Number.isFinite(days) && days > 0
+      ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19) + "Z"
+      : null;
+  const invite = createInvite(crypto.randomBytes(16).toString("base64url"), label, expiresAt);
+  return c.json({ id: invite.id, token: invite.token });
+});
+
+app.post("/api/invites/:id/revoke", (c) => {
+  revokeInvite(Number(c.req.param("id")));
+  return c.json({ ok: true });
 });
 
 app.get("/digest/preview", (c) => c.html(buildWeeklyDigest().html));

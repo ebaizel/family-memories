@@ -1,13 +1,21 @@
 import { type Kid } from "./db.js";
 import { esc } from "./render.js";
 
+export interface ContributorMode {
+  token: string;
+  label: string; // who the invite was made for, e.g. "Grandma"
+}
+
 /**
  * The capture screen: big one-tap buttons for Quote / Photo / Video / Voice,
  * kid chips for tagging, in-browser voice recording via MediaRecorder,
- * native camera/library pickers for photo and video. Posts multipart to
- * /api/moments. Designed phone-first; installable as a PWA.
+ * native camera/library pickers for photo and video. Designed phone-first.
+ *
+ * Two modes: the family's own screen (authed, posts to /api/moments,
+ * installable as a PWA) and contributor mode (public invite link, posts to
+ * /api/contribute/:token, requires the contributor's name, no PWA chrome).
  */
-export function capturePage(kids: Kid[]): string {
+export function capturePage(kids: Kid[], contributor?: ContributorMode): string {
   const kidChips = kids
     .map((k) => `<button class="chip kid-chip" data-kid="${k.id}" type="button">${esc(k.name)}</button>`)
     .join("");
@@ -19,9 +27,9 @@ export function capturePage(kids: Kid[]): string {
   <meta name="robots" content="noindex">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="manifest" href="/manifest.webmanifest">
+  ${contributor ? "" : `<link rel="manifest" href="/manifest.webmanifest">`}
   <link rel="apple-touch-icon" href="/icons/icon-180.png">
-  <title>Capture — Family Memories</title>
+  <title>${contributor ? "Share a moment — Family Memories" : "Capture — Family Memories"}</title>
   <style>
     :root { --fg:#1c1917; --muted:#78716c; --bg:#faf9f7; --card:#ffffff; --line:#e7e5e4; --accent:#b45309; --accent-soft:#fef3c7; }
     @media (prefers-color-scheme: dark) {
@@ -71,7 +79,14 @@ export function capturePage(kids: Kid[]): string {
 </head>
 <body>
 <main>
-  <nav><h1>✨ Capture a moment</h1><a href="/">Timeline →</a></nav>
+  ${
+    contributor
+      ? `<nav><h1>💛 Share a moment</h1></nav>
+  <p style="color:var(--muted);margin:0 0 0.5rem">Hi ${esc(contributor.label)}! Anything you add here goes straight into the family's private memory book.</p>
+  <div class="label">Your name</div>
+  <input type="text" id="author" placeholder="So we know who shared it" autocomplete="name">`
+      : `<nav><h1>✨ Capture a moment</h1><a href="/">Timeline →</a></nav>`
+  }
 
   <div class="label">Who is it about?</div>
   <div class="chips" id="kids">
@@ -113,18 +128,24 @@ export function capturePage(kids: Kid[]): string {
 
   <div id="preview"></div>
 
-  <button id="saveBtn" type="button">Save moment</button>
+  <button id="saveBtn" type="button">${contributor ? "Share moment" : "Save moment"}</button>
 
-  <details>
+  ${
+    contributor
+      ? ""
+      : `<details>
     <summary>Saving as…</summary>
     <input type="text" id="author" placeholder="Your name (shown as 'added by')" autocomplete="name">
-  </details>
+  </details>`
+  }
 </main>
 <div id="toast"></div>
 
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
+  const POST_URL = ${JSON.stringify(contributor ? `/api/contribute/${contributor.token}` : "/api/moments")};
+  const CONTRIBUTOR = ${contributor ? "true" : "false"};
   let momentType = "quote";
   let file = null;        // File or Blob to upload
   let fileName = "";
@@ -222,6 +243,7 @@ export function capturePage(kids: Kid[]): string {
 
   // --- save ---
   $("#saveBtn").addEventListener("click", async () => {
+    if (CONTRIBUTOR && !$("#author").value.trim()) return toast("Add your name first 🙂");
     const kid = document.querySelector(".kid-chip.selected").dataset.kid;
     const form = new FormData();
     form.append("type", momentType);
@@ -238,10 +260,10 @@ export function capturePage(kids: Kid[]): string {
     }
     $("#saveBtn").disabled = true;
     try {
-      const res = await fetch("/api/moments", { method: "POST", body: form });
+      const res = await fetch(POST_URL, { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text());
       const saved = await res.json();
-      toast("Saved" + (saved.kid_name ? " — " + saved.kid_name + " (" + saved.age + ")" : "") + " 🎉");
+      toast((CONTRIBUTOR ? "Shared" : "Saved") + (saved.kid_name ? " — " + saved.kid_name + " (" + saved.age + ")" : "") + " 🎉");
       $("#text").value = ""; $("#caption").value = ""; $("#audioCaption").value = "";
       resetMedia();
     } catch (err) {
@@ -259,7 +281,7 @@ export function capturePage(kids: Kid[]): string {
     t._h = setTimeout(() => t.classList.remove("show"), 3000);
   }
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+  if (!CONTRIBUTOR && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
 })();
 </script>
 </body>

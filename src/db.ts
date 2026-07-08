@@ -93,6 +93,54 @@ export function getKid(id: number): Kid | undefined {
   return db.prepare("SELECT * FROM kids WHERE id = ?").get(id) as Kid | undefined;
 }
 
+// --- Invites: upload-only share links for family & friends ---
+
+export interface Invite {
+  id: number;
+  token: string;
+  label: string;
+  created_at: string;
+  expires_at: string | null; // ISO UTC or null = never
+  revoked: number; // 0 | 1
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    expires_at TEXT,
+    revoked INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
+export function createInvite(token: string, label: string, expiresAt: string | null): Invite {
+  const info = db
+    .prepare("INSERT INTO invites (token, label, expires_at) VALUES (?, ?, ?)")
+    .run(token, label, expiresAt);
+  return db.prepare("SELECT * FROM invites WHERE id = ?").get(info.lastInsertRowid) as Invite;
+}
+
+export function listInvites(): Invite[] {
+  return db.prepare("SELECT * FROM invites ORDER BY created_at DESC").all() as Invite[];
+}
+
+export function findInvite(token: string): Invite | undefined {
+  return db.prepare("SELECT * FROM invites WHERE token = ?").get(token) as Invite | undefined;
+}
+
+export function revokeInvite(id: number): void {
+  db.prepare("UPDATE invites SET revoked = 1 WHERE id = ?").run(id);
+}
+
+/** An invite works if it hasn't been revoked and hasn't expired. */
+export function inviteUsable(inv: Invite, now: Date = new Date()): boolean {
+  if (inv.revoked) return false;
+  if (inv.expires_at && new Date(inv.expires_at) <= now) return false;
+  return true;
+}
+
 export function momentsSince(isoDate: string): MomentWithKid[] {
   return db
     .prepare(
