@@ -15,6 +15,15 @@ Open `/capture` on your phone — big one-tap buttons for **Quote / Photo / Vide
 
 Install it like an app: in Safari (iOS) or Chrome (Android), open the site → Share → **Add to Home Screen**. It launches straight into the capture screen with the family-memories icon.
 
+## Invite links (grandparents & friends)
+
+Open `/invites` to create **upload-only share links** — no account, no password needed by the recipient:
+
+- Each link gets a label ("Grandma", "Leo's birthday party") and an optional expiry (7/30 days or never).
+- Recipients see a friendly share screen — photo, video, voice, or story — with the kids' name chips for tagging. Their name (or the invite label) shows as "added by".
+- Links can be revoked anytime; dead links get a gentle "ask for a fresh link" page.
+- Contributors can **never see the timeline** — the link only accepts uploads.
+
 ## How it works
 
 ```
