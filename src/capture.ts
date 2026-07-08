@@ -92,6 +92,7 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
   <div class="chips" id="kids">
     <button class="chip kid-chip selected" data-kid="" type="button">Family</button>
     ${kidChips}
+    ${!kids.length && !contributor ? `<a class="chip" href="/kids" style="text-decoration:none">＋ Add your kids</a>` : ""}
   </div>
 
   <div class="label">What kind of moment?</div>

@@ -1,0 +1,25 @@
+# Fly.io config — run `fly launch --copy-config --no-deploy` and it will
+# prompt for an app name and region, then follow README "Deploy on Fly.io".
+app = "family-memories"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  DATA_DIR = "/data"
+  PORT = "3000"
+
+[mounts]
+  source = "family_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

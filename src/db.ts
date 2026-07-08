@@ -93,6 +93,10 @@ export function getKid(id: number): Kid | undefined {
   return db.prepare("SELECT * FROM kids WHERE id = ?").get(id) as Kid | undefined;
 }
 
+export function updateKid(id: number, name: string, birthdate: string): void {
+  db.prepare("UPDATE kids SET name = ?, birthdate = ? WHERE id = ?").run(name, birthdate, id);
+}
+
 // --- Invites: upload-only share links for family & friends ---
 
 export interface Invite {

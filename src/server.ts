@@ -6,9 +6,10 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { config, mediaDir } from "./config.js";
 import {
-  addMoment, createInvite, findInvite, getKid, inviteUsable, listInvites, listKids,
-  recentMoments, revokeInvite, type MomentType,
+  addKid, addMoment, createInvite, findInvite, findKidByName, getKid, inviteUsable,
+  listInvites, listKids, recentMoments, revokeInvite, updateKid, type MomentType,
 } from "./db.js";
+import { kidsPage } from "./kids.js";
 import { timelinePage } from "./render.js";
 import { capturePage } from "./capture.js";
 import { invitesPage, inviteGonePage } from "./invites.js";
@@ -133,6 +134,42 @@ app.get("/", (c) => {
 app.get("/capture", (c) => c.html(capturePage(listKids())));
 
 app.post("/api/moments", async (c) => saveMomentFromForm(c, await c.req.parseBody()));
+
+// --- Kids management (behind auth) ---
+app.get("/kids", (c) => c.html(kidsPage(listKids())));
+
+function validKidInput(name: string, birthdate: string): string | null {
+  if (!name) return "name required";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) return "birthday must be YYYY-MM-DD";
+  const d = new Date(birthdate + "T00:00:00Z");
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== birthdate) return "not a real date";
+  if (d.getTime() > Date.now()) return "birthday is in the future";
+  return null;
+}
+
+app.post("/api/kids", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body.name ?? "").trim();
+  const birthdate = String(body.birthdate ?? "").trim();
+  const err = validKidInput(name, birthdate);
+  if (err) return c.text(err, 400);
+  if (findKidByName(name)) return c.text(`${name} is already added`, 400);
+  return c.json(addKid(name, birthdate));
+});
+
+app.post("/api/kids/:id", async (c) => {
+  const kid = getKid(Number(c.req.param("id")));
+  if (!kid) return c.text("kid not found", 404);
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body.name ?? "").trim();
+  const birthdate = String(body.birthdate ?? "").trim();
+  const err = validKidInput(name, birthdate);
+  if (err) return c.text(err, 400);
+  const clash = findKidByName(name);
+  if (clash && clash.id !== kid.id) return c.text(`${name} is already added`, 400);
+  updateKid(kid.id, name, birthdate);
+  return c.json({ ok: true });
+});
 
 // --- Invite admin (still behind auth) ---
 app.get("/invites", (c) => {
