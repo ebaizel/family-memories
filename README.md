@@ -8,7 +8,7 @@ This covers **Slice A** (the quote catcher) plus the **PWA capture app** from th
 
 Open `/capture` on your phone — big one-tap buttons for **Quote / Photo / Video / Voice**:
 
-- **Quote/note**: type it, tap a kid chip, save. The response confirms the kid's age at that moment.
+- **Quote/note**: type it, tap one or more kid chips (sibling moments tag everyone involved), save. The response confirms each kid's age at that moment.
 - **Photo & video**: opens the native camera or photo library.
 - **Voice**: records in the browser (MediaRecorder) with live timer and playback preview before saving.
 - The timeline at `/` has per-kid filter chips and a Capture button.
@@ -37,9 +37,10 @@ you (or grandma) ──text/photo/voice──▶ Telegram bot ──webhook─�
 Send the bot:
 
 - `Maya: the moon is following our car` → saved as a **quote**, tagged Maya with her age
+- `Maya + Leo: built a pillow fort` → tags **both kids** (also works with `and`, `&`, or commas)
 - a **photo / voice memo / video**, optionally captioned `Maya: ...` to tag
 - any other text → saved as a **note**
-- `#maya` anywhere in a message also tags
+- `#maya #leo` anywhere in a message also tags any number of kids
 
 Commands: `/addkid Maya 2023-04-12`, `/kids`, `/help`
 

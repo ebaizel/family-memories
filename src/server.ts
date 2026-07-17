@@ -78,8 +78,14 @@ async function saveMomentFromForm(c: Context, body: Record<string, unknown>, aut
   }
   const text = String(body.text ?? "").trim() || null;
   const author = String(body.author ?? "").trim() || authorFallback || null;
-  const kidIdRaw = Number(body.kid_id);
-  const kid = Number.isInteger(kidIdRaw) && kidIdRaw > 0 ? getKid(kidIdRaw) : undefined;
+  // kid_ids: comma-separated ids; legacy kid_id still accepted.
+  const idList = String(body.kid_ids ?? body.kid_id ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  const kids = [...new Set(idList)]
+    .map((id) => getKid(id))
+    .filter((k): k is NonNullable<typeof k> => Boolean(k));
 
   let mediaFile: string | null = null;
   const file = body.file;
@@ -97,13 +103,12 @@ async function saveMomentFromForm(c: Context, body: Record<string, unknown>, aut
     type: type as MomentType,
     text,
     mediaFile,
-    kidId: kid?.id ?? null,
+    kidIds: kids.map((k) => k.id),
     author,
   });
   return c.json({
     id: moment.id,
-    kid_name: kid?.name ?? null,
-    age: kid ? ageAt(kid.birthdate, new Date()) : null,
+    kids: kids.map((k) => ({ name: k.name, age: ageAt(k.birthdate, new Date()) })),
   });
 }
 

@@ -16,14 +16,12 @@ export interface Moment {
   type: MomentType;
   text: string | null;
   media_file: string | null;
-  kid_id: number | null;
   author: string | null;
   created_at: string; // ISO UTC
 }
 
-export interface MomentWithKid extends Moment {
-  kid_name: string | null;
-  kid_birthdate: string | null;
+export interface MomentWithKids extends Moment {
+  kids: Kid[]; // every kid tagged on this moment, oldest first
 }
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -43,11 +41,22 @@ db.exec(`
     type TEXT NOT NULL,
     text TEXT,
     media_file TEXT,
-    kid_id INTEGER REFERENCES kids(id),
+    kid_id INTEGER REFERENCES kids(id), -- legacy single-kid column; moment_kids is the source of truth
     author TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
   );
   CREATE INDEX IF NOT EXISTS idx_moments_created ON moments(created_at DESC);
+  CREATE TABLE IF NOT EXISTS moment_kids (
+    moment_id INTEGER NOT NULL REFERENCES moments(id),
+    kid_id INTEGER NOT NULL REFERENCES kids(id),
+    PRIMARY KEY (moment_id, kid_id)
+  );
+`);
+
+// Migrate any pre-multi-kid rows into the join table (idempotent).
+db.exec(`
+  INSERT OR IGNORE INTO moment_kids (moment_id, kid_id)
+    SELECT id, kid_id FROM moments WHERE kid_id IS NOT NULL;
 `);
 
 export function addKid(name: string, birthdate: string): Kid {
@@ -63,30 +72,54 @@ export function findKidByName(name: string): Kid | undefined {
   return db.prepare("SELECT * FROM kids WHERE name = ? COLLATE NOCASE").get(name) as Kid | undefined;
 }
 
+const insertMomentKids = db.transaction((momentId: number, kidIds: number[]) => {
+  const stmt = db.prepare("INSERT OR IGNORE INTO moment_kids (moment_id, kid_id) VALUES (?, ?)");
+  for (const kidId of kidIds) stmt.run(momentId, kidId);
+});
+
 export function addMoment(m: {
   type: MomentType;
   text?: string | null;
   mediaFile?: string | null;
-  kidId?: number | null;
+  kidIds?: number[];
   author?: string | null;
 }): Moment {
   const info = db
-    .prepare("INSERT INTO moments (type, text, media_file, kid_id, author) VALUES (?, ?, ?, ?, ?)")
-    .run(m.type, m.text ?? null, m.mediaFile ?? null, m.kidId ?? null, m.author ?? null);
-  return db.prepare("SELECT * FROM moments WHERE id = ?").get(info.lastInsertRowid) as Moment;
+    .prepare("INSERT INTO moments (type, text, media_file, author) VALUES (?, ?, ?, ?)")
+    .run(m.type, m.text ?? null, m.mediaFile ?? null, m.author ?? null);
+  const id = Number(info.lastInsertRowid);
+  if (m.kidIds?.length) insertMomentKids(id, m.kidIds);
+  return db.prepare("SELECT * FROM moments WHERE id = ?").get(id) as Moment;
 }
 
-export function recentMoments(limit = 200, kidId?: number): MomentWithKid[] {
-  const where = kidId ? "WHERE m.kid_id = ?" : "";
+// json_group_array lets one query return each moment with all its tagged kids.
+const KIDS_JSON = `(
+  SELECT json_group_array(json_object('id', k.id, 'name', k.name, 'birthdate', k.birthdate))
+  FROM (SELECT kid_id FROM moment_kids WHERE moment_id = m.id) mk
+  JOIN kids k ON k.id = mk.kid_id
+) AS kids_json`;
+
+function withKids(rows: (Moment & { kids_json: string })[]): MomentWithKids[] {
+  return rows.map(({ kids_json, ...m }) => {
+    const kids = (JSON.parse(kids_json) as Kid[]).sort((a, b) => a.birthdate.localeCompare(b.birthdate));
+    return { ...m, kids };
+  });
+}
+
+export function recentMoments(limit = 200, kidId?: number): MomentWithKids[] {
+  const where = kidId
+    ? "WHERE EXISTS (SELECT 1 FROM moment_kids mk2 WHERE mk2.moment_id = m.id AND mk2.kid_id = ?)"
+    : "";
   const params = kidId ? [kidId, limit] : [limit];
-  return db
-    .prepare(
-      `SELECT m.*, k.name AS kid_name, k.birthdate AS kid_birthdate
-       FROM moments m LEFT JOIN kids k ON k.id = m.kid_id
-       ${where}
-       ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
-    )
-    .all(...params) as MomentWithKid[];
+  return withKids(
+    db
+      .prepare(
+        `SELECT m.*, ${KIDS_JSON} FROM moments m
+         ${where}
+         ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
+      )
+      .all(...params) as (Moment & { kids_json: string })[],
+  );
 }
 
 export function getKid(id: number): Kid | undefined {
@@ -145,13 +178,14 @@ export function inviteUsable(inv: Invite, now: Date = new Date()): boolean {
   return true;
 }
 
-export function momentsSince(isoDate: string): MomentWithKid[] {
-  return db
-    .prepare(
-      `SELECT m.*, k.name AS kid_name, k.birthdate AS kid_birthdate
-       FROM moments m LEFT JOIN kids k ON k.id = m.kid_id
-       WHERE m.created_at >= ?
-       ORDER BY m.created_at ASC, m.id ASC`,
-    )
-    .all(isoDate) as MomentWithKid[];
+export function momentsSince(isoDate: string): MomentWithKids[] {
+  return withKids(
+    db
+      .prepare(
+        `SELECT m.*, ${KIDS_JSON} FROM moments m
+         WHERE m.created_at >= ?
+         ORDER BY m.created_at ASC, m.id ASC`,
+      )
+      .all(isoDate) as (Moment & { kids_json: string })[],
+  );
 }
