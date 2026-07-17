@@ -152,19 +152,26 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
   let fileName = "";
   let recorder = null, recChunks = [], recTimer = null, recStart = 0;
 
-  // --- kid selection ---
+  // --- kid selection: tap any number of kids; "Family" means none ---
+  const familyChip = document.querySelector('.kid-chip[data-kid=""]');
+  const kidChips = () => [...document.querySelectorAll('.kid-chip:not([data-kid=""])')];
+  const selectedKidIds = () => kidChips().filter((c) => c.classList.contains("selected")).map((c) => c.dataset.kid);
   document.querySelectorAll(".kid-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
-      document.querySelectorAll(".kid-chip").forEach((c) => c.classList.remove("selected"));
-      chip.classList.add("selected");
-      localStorage.setItem("lastKid", chip.dataset.kid);
+      if (chip === familyChip) {
+        kidChips().forEach((c) => c.classList.remove("selected"));
+        familyChip.classList.add("selected");
+      } else {
+        chip.classList.toggle("selected");
+        familyChip.classList.toggle("selected", selectedKidIds().length === 0);
+      }
+      localStorage.setItem("lastKids", selectedKidIds().join(","));
     });
   });
-  const lastKid = localStorage.getItem("lastKid");
-  if (lastKid) {
-    const chip = document.querySelector('.kid-chip[data-kid="' + lastKid + '"]');
-    if (chip) { document.querySelectorAll(".kid-chip").forEach((c) => c.classList.remove("selected")); chip.classList.add("selected"); }
-  }
+  (localStorage.getItem("lastKids") || "").split(",").filter(Boolean).forEach((id) => {
+    const chip = document.querySelector('.kid-chip[data-kid="' + id + '"]');
+    if (chip) { chip.classList.add("selected"); familyChip.classList.remove("selected"); }
+  });
 
   // --- author memory ---
   $("#author").value = localStorage.getItem("author") || "";
@@ -245,10 +252,9 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
   // --- save ---
   $("#saveBtn").addEventListener("click", async () => {
     if (CONTRIBUTOR && !$("#author").value.trim()) return toast("Add your name first 🙂");
-    const kid = document.querySelector(".kid-chip.selected").dataset.kid;
     const form = new FormData();
     form.append("type", momentType);
-    form.append("kid_id", kid);
+    form.append("kid_ids", selectedKidIds().join(","));
     form.append("author", $("#author").value.trim());
     if (momentType === "quote") {
       const text = $("#text").value.trim();
@@ -264,7 +270,8 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
       const res = await fetch(POST_URL, { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text());
       const saved = await res.json();
-      toast((CONTRIBUTOR ? "Shared" : "Saved") + (saved.kid_name ? " — " + saved.kid_name + " (" + saved.age + ")" : "") + " 🎉");
+      const who = (saved.kids || []).map((k) => k.name + " (" + k.age + ")").join(", ");
+      toast((CONTRIBUTOR ? "Shared" : "Saved") + (who ? " — " + who : "") + " 🎉");
       $("#text").value = ""; $("#caption").value = ""; $("#audioCaption").value = "";
       resetMedia();
     } catch (err) {

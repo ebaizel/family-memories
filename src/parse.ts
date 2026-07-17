@@ -1,33 +1,55 @@
 /**
- * Figure out which kid a message is about.
+ * Figure out which kid(s) a message is about.
  *
  * Supported forms (case-insensitive against known kid names):
- *   "Maya: the moon is following our car"   → kid Maya, text after the colon
- *   "Maya - I did it myself"                → same, with a dash
- *   "#maya splashing in puddles"            → hashtag anywhere in the text
+ *   "Maya: the moon is following our car"       → Maya
+ *   "Maya + Leo: built a fort"                  → Maya and Leo
+ *   "maya and leo - dance party"                → Maya and Leo (spaced dash)
+ *   "Maya, Leo & Zoe: bath chaos"               → all three
+ *   "splashing in puddles #maya #leo"           → hashtags, any number, anywhere
  *
- * Returns the matched kid name (as stored) and the text with the tag removed.
+ * A name-prefix only counts when EVERY listed name is a known kid —
+ * "Grandma: look at this" stays plain text.
+ *
+ * Returns the matched kid names (as stored) and the text with tags removed.
  */
-export function parseKidTag(
+export function parseKidTags(
   text: string,
   kidNames: string[],
-): { kidName: string | null; text: string } {
+): { kidNames: string[]; text: string } {
   const trimmed = text.trim();
 
-  const prefix = trimmed.match(/^([\p{L}\p{M}'-]+)\s*[:\-–—]\s*(.+)$/su);
-  if (prefix) {
-    const match = kidNames.find((n) => n.toLowerCase() === prefix[1].toLowerCase());
-    if (match) return { kidName: match, text: prefix[2].trim() };
-  }
-
-  for (const name of kidNames) {
-    const tag = new RegExp(`#${escapeRegExp(name)}\\b`, "iu");
-    if (tag.test(trimmed)) {
-      return { kidName: name, text: trimmed.replace(tag, "").replace(/\s{2,}/g, " ").trim() };
+  // Prefix before a colon, or before a dash that has spaces around it
+  // (bare dashes stay untouched so hyphenated names like Anne-Marie work).
+  for (const re of [/^([^:\n]+?)\s*:\s*(.+)$/su, /^([^\n]+?)\s+[-–—]\s+(.+)$/su]) {
+    const m = trimmed.match(re);
+    if (!m) continue;
+    const parts = m[1]
+      .split(/\s*(?:[+&,]|\band\b)\s*/iu)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!parts.length) continue;
+    const matched = parts.map((p) => kidNames.find((n) => n.toLowerCase() === p.toLowerCase()));
+    if (matched.length && matched.every((k): k is string => Boolean(k))) {
+      return { kidNames: [...new Set(matched)], text: m[2].trim() };
     }
   }
 
-  return { kidName: null, text: trimmed };
+  // Hashtags: collect every kid tagged anywhere in the message.
+  let rest = trimmed;
+  const found: string[] = [];
+  for (const name of kidNames) {
+    const tag = new RegExp(`#${escapeRegExp(name)}\\b`, "iu");
+    if (tag.test(rest)) {
+      found.push(name);
+      rest = rest.replace(tag, "");
+    }
+  }
+  if (found.length) {
+    return { kidNames: found, text: rest.replace(/\s{2,}/g, " ").trim() };
+  }
+
+  return { kidNames: [], text: trimmed };
 }
 
 function escapeRegExp(s: string): string {

@@ -1,4 +1,4 @@
-import { type Kid, type MomentWithKid } from "./db.js";
+import { type Kid, type MomentWithKids } from "./db.js";
 import { ageAt } from "./age.js";
 
 const ICONS: Record<string, string> = {
@@ -13,7 +13,7 @@ export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-function mediaTag(m: MomentWithKid): string {
+function mediaTag(m: MomentWithKids): string {
   if (!m.media_file) return "";
   const src = `/media/${encodeURIComponent(m.media_file)}`;
   if (m.type === "photo") return `<img src="${src}" alt="" loading="lazy">`;
@@ -22,11 +22,11 @@ function mediaTag(m: MomentWithKid): string {
   return "";
 }
 
-function momentCard(m: MomentWithKid): string {
+function momentCard(m: MomentWithKids): string {
   const when = new Date(m.created_at + (m.created_at.endsWith("Z") ? "" : "Z"));
-  const who = m.kid_name
-    ? `<span class="kid">${esc(m.kid_name)}</span> <span class="age">${ageAt(m.kid_birthdate!, when)}</span>`
-    : "";
+  const who = m.kids
+    .map((k) => `<span class="kid">${esc(k.name)}</span> <span class="age">${ageAt(k.birthdate, when)}</span>`)
+    .join('<span class="sep">·</span>');
   const body =
     m.type === "quote" && m.text
       ? `<blockquote>“${esc(m.text)}”</blockquote>`
@@ -55,6 +55,7 @@ const STYLE = `
   .moment header { font-size: 0.85rem; color: var(--muted); display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
   .moment header .kid { font-weight: 600; color: var(--fg); }
   .moment header .age { color: var(--accent); font-weight: 600; }
+  .moment header .sep { color: var(--muted); }
   .moment header time { margin-left: auto; }
   blockquote { font-size: 1.15rem; line-height: 1.5; margin: 0.6rem 0 0.2rem; font-style: italic; }
   p { margin: 0.6rem 0 0.2rem; line-height: 1.5; }
@@ -72,7 +73,7 @@ const STYLE = `
   .filters a.selected { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 `;
 
-export function timelinePage(moments: MomentWithKid[], kids: Kid[] = [], selectedKidId?: number): string {
+export function timelinePage(moments: MomentWithKids[], kids: Kid[] = [], selectedKidId?: number): string {
   const cards = moments.length
     ? moments.map(momentCard).join("\n")
     : `<p class="empty">No moments yet — capture your first one!</p>`;
@@ -114,11 +115,13 @@ export function timelinePage(moments: MomentWithKid[], kids: Kid[] = [], selecte
 }
 
 /** Simple self-contained HTML for the weekly digest email. */
-export function digestHtml(moments: MomentWithKid[], since: Date): string {
+export function digestHtml(moments: MomentWithKids[], since: Date): string {
   const items = moments
     .map((m) => {
       const when = new Date(m.created_at + (m.created_at.endsWith("Z") ? "" : "Z"));
-      const who = m.kid_name ? `<strong>${esc(m.kid_name)}</strong> (${ageAt(m.kid_birthdate!, when)}) — ` : "";
+      const who = m.kids.length
+        ? m.kids.map((k) => `<strong>${esc(k.name)}</strong> (${ageAt(k.birthdate, when)})`).join(" · ") + " — "
+        : "";
       const text = m.text ? esc(m.text) : `[${m.type}]`;
       return `<li style="margin-bottom:12px">${ICONS[m.type] ?? ""} ${who}${text}</li>`;
     })

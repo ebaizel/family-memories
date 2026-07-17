@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { config, mediaDir } from "./config.js";
-import { addKid, addMoment, findKidByName, listKids, type MomentType } from "./db.js";
-import { parseKidTag } from "./parse.js";
+import { addKid, addMoment, findKidByName, listKids, type Kid, type MomentType } from "./db.js";
+import { parseKidTags } from "./parse.js";
 import { ageAt } from "./age.js";
 
 // Minimal slice of Telegram's Update type — just the fields we use.
@@ -83,11 +83,13 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     return;
   }
 
-  const kids = listKids();
-  const kidNames = kids.map((k) => k.name);
+  const allKids = listKids();
+  const kidNames = allKids.map((k) => k.name);
   const rawText = text ?? msg.caption?.trim() ?? "";
-  const { kidName, text: cleanText } = parseKidTag(rawText, kidNames);
-  const kid = kidName ? findKidByName(kidName) : undefined;
+  const { kidNames: taggedNames, text: cleanText } = parseKidTags(rawText, kidNames);
+  const kids = taggedNames
+    .map((n) => findKidByName(n))
+    .filter((k): k is Kid => Boolean(k));
 
   let type: MomentType;
   let fileId: string | null = null;
@@ -102,7 +104,7 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     fileId = (msg.video ?? msg.video_note)!.file_id;
   } else if (text) {
     // A tagged text message reads as a quote; untagged reads as a note.
-    type = kid ? "quote" : "note";
+    type = kids.length ? "quote" : "note";
   } else {
     await reply(chatId, "I can save text, photos, voice memos, and videos. Try /help");
     return;
@@ -118,16 +120,17 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     type,
     text: cleanText || null,
     mediaFile,
-    kidId: kid?.id ?? null,
+    kidIds: kids.map((k) => k.id),
     author,
   });
 
   const icon = { quote: "💬", note: "📝", photo: "📷", audio: "🎙️", video: "🎬" }[type];
-  if (kid) {
-    await reply(chatId, `Saved ${icon} — ${kid.name} (${ageAt(kid.birthdate, new Date())})`);
+  if (kids.length) {
+    const who = kids.map((k) => `${k.name} (${ageAt(k.birthdate, new Date())})`).join(", ");
+    await reply(chatId, `Saved ${icon} — ${who}`);
   } else {
     const tip = kidNames.length
-      ? ` Tip: start with "${kidNames[0]}:" or add #${kidNames[0].toLowerCase()} to tag a kid.`
+      ? ` Tip: start with "${kidNames[0]}:" (or "${kidNames.join(" + ")}:" for all) to tag.`
       : " Tip: register kids with /addkid so moments get tagged with their age.";
     await reply(chatId, `Saved ${icon}.${tip}`);
   }
