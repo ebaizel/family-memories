@@ -87,6 +87,21 @@ async function saveMomentFromForm(c: Context, body: Record<string, unknown>, aut
     .map((id) => getKid(id))
     .filter((k): k is NonNullable<typeof k> => Boolean(k));
 
+  // Optional backdate: YYYY-MM-DD, stored as noon UTC so it lands on the
+  // right calendar day in any timezone. Omitted/today = precise "now".
+  const dateRaw = String(body.date ?? "").trim();
+  let createdAt: string | undefined;
+  if (dateRaw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) return c.text("date must be YYYY-MM-DD", 400);
+    const d = new Date(dateRaw + "T12:00:00Z");
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== dateRaw) {
+      return c.text("not a real date", 400);
+    }
+    // +36h slack so "today" in any timezone never counts as future.
+    if (d.getTime() > Date.now() + 36 * 60 * 60 * 1000) return c.text("date is in the future", 400);
+    createdAt = dateRaw + "T12:00:00Z";
+  }
+
   let mediaFile: string | null = null;
   const file = body.file;
   if (file instanceof File) {
@@ -105,10 +120,13 @@ async function saveMomentFromForm(c: Context, body: Record<string, unknown>, aut
     mediaFile,
     kidIds: kids.map((k) => k.id),
     author,
+    createdAt,
   });
+  const when = createdAt ? new Date(createdAt) : new Date();
   return c.json({
     id: moment.id,
-    kids: kids.map((k) => ({ name: k.name, age: ageAt(k.birthdate, new Date()) })),
+    date: createdAt ? dateRaw : null,
+    kids: kids.map((k) => ({ name: k.name, age: ageAt(k.birthdate, when) })),
   });
 }
 

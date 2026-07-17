@@ -57,6 +57,8 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
                border:1.5px solid var(--line); border-radius:12px; padding:0.75rem; resize:vertical; }
     input[type=text] { width:100%; font:inherit; color:inherit; background:var(--card);
                border:1.5px solid var(--line); border-radius:12px; padding:0.6rem 0.75rem; }
+    input[type=date] { font:inherit; color:inherit; background:var(--card); -webkit-appearance:none;
+               border:1.5px solid var(--line); border-radius:12px; padding:0.55rem 0.75rem; min-height:2.8rem; }
     .hidden { display:none !important; }
     #preview img, #preview video { max-width:100%; border-radius:12px; margin-top:0.5rem; }
     #preview audio { width:100%; margin-top:0.5rem; }
@@ -129,6 +131,9 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
 
   <div id="preview"></div>
 
+  <div class="label">When was it?</div>
+  <input type="date" id="date">
+
   <button id="saveBtn" type="button">${contributor ? "Share moment" : "Save moment"}</button>
 
   ${
@@ -176,6 +181,11 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
   // --- author memory ---
   $("#author").value = localStorage.getItem("author") || "";
   $("#author").addEventListener("input", (e) => localStorage.setItem("author", e.target.value));
+
+  // --- date: defaults to today (local); only sent when changed ---
+  const todayStr = new Date().toLocaleDateString("sv"); // sv locale = YYYY-MM-DD
+  $("#date").value = todayStr;
+  $("#date").max = todayStr;
 
   // --- type selection ---
   document.querySelectorAll(".big[data-type]").forEach((btn) => {
@@ -256,6 +266,7 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
     form.append("type", momentType);
     form.append("kid_ids", selectedKidIds().join(","));
     form.append("author", $("#author").value.trim());
+    if ($("#date").value && $("#date").value !== todayStr) form.append("date", $("#date").value);
     if (momentType === "quote") {
       const text = $("#text").value.trim();
       if (!text) return toast("Write the moment first ✏️");
@@ -271,8 +282,10 @@ export function capturePage(kids: Kid[], contributor?: ContributorMode): string 
       if (!res.ok) throw new Error(await res.text());
       const saved = await res.json();
       const who = (saved.kids || []).map((k) => k.name + " (" + k.age + ")").join(", ");
-      toast((CONTRIBUTOR ? "Shared" : "Saved") + (who ? " — " + who : "") + " 🎉");
+      const when = saved.date ? " on " + saved.date : "";
+      toast((CONTRIBUTOR ? "Shared" : "Saved") + (who ? " — " + who : "") + when + " 🎉");
       $("#text").value = ""; $("#caption").value = ""; $("#audioCaption").value = "";
+      $("#date").value = todayStr;
       resetMedia();
     } catch (err) {
       toast("Couldn't save: " + err.message);
