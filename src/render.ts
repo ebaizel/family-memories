@@ -63,8 +63,12 @@ const STYLE = `
   audio { width: 100%; margin-top: 0.75rem; }
   footer { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
   .empty { color: var(--muted); text-align: center; padding: 3rem 0; }
-  nav { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1rem; }
-  nav h1 { margin: 0; }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 0.75rem;
+        flex-wrap: wrap; margin-bottom: 1rem; }
+  nav h1 { margin: 0; font-size: 1.3rem; }
+  nav .links { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+  nav .links a { white-space: nowrap; }
+  .nav-minor { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
   .capture-link { color: #fff; background: var(--accent); text-decoration: none; font-weight: 700;
                   padding: 0.5rem 1rem; border-radius: 999px; font-size: 0.9rem; }
   .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
@@ -100,10 +104,10 @@ export function timelinePage(moments: MomentWithKids[], kids: Kid[] = [], select
   <main>
     <nav>
       <h1>Family Memories</h1>
-      <span>
-        <a href="/kids" style="color:var(--muted);text-decoration:none;font-size:0.85rem;margin-right:0.75rem">Kids</a>
-        <a href="/invites" style="color:var(--muted);text-decoration:none;font-size:0.85rem;margin-right:0.75rem">Invites</a>
-        <a class="capture-link" href="/capture">＋ Capture</a>
+      <span class="links">
+        <a class="nav-minor" href="/kids">Kids</a>
+        <a class="nav-minor" href="/invites">Invites</a>
+        <a class="capture-link" href="/capture">+ Capture</a>
       </span>
     </nav>
     ${filters}

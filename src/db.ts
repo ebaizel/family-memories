@@ -83,10 +83,15 @@ export function addMoment(m: {
   mediaFile?: string | null;
   kidIds?: number[];
   author?: string | null;
+  createdAt?: string; // ISO UTC; omit for "now" — used to backdate moments
 }): Moment {
-  const info = db
-    .prepare("INSERT INTO moments (type, text, media_file, author) VALUES (?, ?, ?, ?)")
-    .run(m.type, m.text ?? null, m.mediaFile ?? null, m.author ?? null);
+  const info = m.createdAt
+    ? db
+        .prepare("INSERT INTO moments (type, text, media_file, author, created_at) VALUES (?, ?, ?, ?, ?)")
+        .run(m.type, m.text ?? null, m.mediaFile ?? null, m.author ?? null, m.createdAt)
+    : db
+        .prepare("INSERT INTO moments (type, text, media_file, author) VALUES (?, ?, ?, ?)")
+        .run(m.type, m.text ?? null, m.mediaFile ?? null, m.author ?? null);
   const id = Number(info.lastInsertRowid);
   if (m.kidIds?.length) insertMomentKids(id, m.kidIds);
   return db.prepare("SELECT * FROM moments WHERE id = ?").get(id) as Moment;
